@@ -1,0 +1,19 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    KimaiPlugin\SwissQrBundle\:
+        resource: '../../*'
+        exclude: '../../{Resources}'
+
+    KimaiPlugin\SwissQrBundle\EventSubscriber\InvoiceSubscriber:
+        arguments:
+            $qrService: '@KimaiPlugin\SwissQrBundle\Service\SwissQrService'
+        tags:
+            - { name: kernel.event_subscriber }
+
+    KimaiPlugin\SwissQrBundle\Controller\:
+        resource: '../../Controller'
+        tags: ['controller.service_arguments']

@@ -1,0 +1,99 @@
+<?php
+
+namespace KimaiPlugin\SwissQrBundle\EventSubscriber;
+
+use App\Event\InvoiceCreatedEvent;
+use App\Event\InvoiceUpdatedEvent;
+use App\Event\InvoicePreRenderEvent;
+use App\Entity\InvoiceMeta;
+use App\Event\InvoiceMetaDefinitionEvent;
+use App\Event\InvoiceMetaDisplayEvent;
+use App\Entity\MetaTableTypeInterface;
+use KimaiPlugin\SwissQrBundle\Service\SwissQrService;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Validator\Constraints\Length;
+
+class InvoiceSubscriber implements EventSubscriberInterface
+{
+    private $qrService;
+
+    public function __construct(SwissQrService $qrService)
+    {
+        $this->qrService = $qrService;
+    }
+
+    public static function getSubscribedEvents(): array
+    {
+        return [
+            InvoiceCreatedEvent::class => 'onInvoiceCreated',
+            InvoiceUpdatedEvent::class => 'onInvoiceUpdated',
+            InvoicePreRenderEvent::class => 'onInvoicePreRender',
+            InvoiceMetaDefinitionEvent::class => 'onInvoiceMetaDefinition',
+            InvoiceMetaDisplayEvent::class => 'onInvoiceMetaDisplay',
+        ];
+    }
+
+    public function onInvoiceCreated(InvoiceCreatedEvent $event): void
+    {
+        $invoice = $event->getInvoice();
+        $reference = $this->qrService->generateQrCode($invoice);
+
+        // Try to get existing meta field
+        $meta = $invoice->getMetaField('qr_reference');
+        if ($meta === null) {
+            // Create new meta field if it doesn't exist
+            $meta = $this->createQrReferenceMeta();
+            $invoice->setMetaField($meta);
+        }
+        $meta->setValue($reference);
+    }
+
+    public function onInvoiceUpdated(InvoiceUpdatedEvent $event): void
+    {
+        $invoice = $event->getInvoice();
+        $reference = $this->qrService->generateQrCode($invoice);
+
+        $meta = $invoice->getMetaField('qr_reference');
+        if ($meta === null) {
+            $meta = $this->createQrReferenceMeta();
+            $invoice->setMetaField($meta);
+        }
+        $meta->setValue($reference);
+    }
+
+    /**
+     * Creates a new InvoiceMeta object for the QR reference.
+     */
+    private function createQrReferenceMeta(): MetaTableTypeInterface
+    {
+        $meta = new InvoiceMeta();
+        $meta->setName('qr_reference');
+        $meta->setLabel('QR Referenz');
+        $meta->setOptions([
+            'label' => 'QR Referenz',
+            'help' => 'Automatisch erstellte QR Referenz. (Mit Sorgfalt bearbeiten!)'
+        ]);
+        $meta->setType(TextType::class);
+        $meta->addConstraint(new Length(['max' => 27]));
+        $meta->setIsVisible(true);
+        return $meta;
+    }
+
+    public function onInvoicePreRender(InvoicePreRenderEvent $event): void
+    {
+        $model = $event->getModel();
+        $reference = $this->qrService->generateQrCode($model);
+    }
+
+    public function onInvoiceMetaDefinition(InvoiceMetaDefinitionEvent $event): void
+    {
+        $event->getEntity()->setMetaField($this->createQrReferenceMeta());
+    }
+
+    public function onInvoiceMetaDisplay(InvoiceMetaDisplayEvent $event): void
+    {
+        $event->addField($this->createQrReferenceMeta());
+    }
+} 

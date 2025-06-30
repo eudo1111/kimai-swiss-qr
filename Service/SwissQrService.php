@@ -100,7 +100,7 @@ class SwissQrService
             $buildingNumber,
             $postal,
             $city,
-            $$country
+            $country
         );
         $qrBill->setCreditor($creditor);
 

@@ -14,12 +14,13 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Validator\Constraints\Length;
+use App\Repository\InvoiceRepository;
 
 class InvoiceSubscriber implements EventSubscriberInterface
 {
     private $qrService;
 
-    public function __construct(SwissQrService $qrService)
+    public function __construct(SwissQrService $qrService, private readonly InvoiceRepository $invoiceRepository)
     {
         $this->qrService = $qrService;
     }
@@ -40,14 +41,13 @@ class InvoiceSubscriber implements EventSubscriberInterface
         $invoice = $event->getInvoice();
         $reference = $this->qrService->generateQrCode($invoice);
 
-        // Try to get existing meta field
         $meta = $invoice->getMetaField('qr_reference');
         if ($meta === null) {
-            // Create new meta field if it doesn't exist
             $meta = $this->createQrReferenceMeta();
             $invoice->setMetaField($meta);
         }
         $meta->setValue($reference);
+        $this->invoiceRepository->saveInvoice($invoice);
     }
 
     public function onInvoiceUpdated(InvoiceUpdatedEvent $event): void
@@ -61,11 +61,16 @@ class InvoiceSubscriber implements EventSubscriberInterface
             $invoice->setMetaField($meta);
         }
         $meta->setValue($reference);
+        $this->invoiceRepository->saveInvoice($invoice);
     }
 
-    /**
-     * Creates a new InvoiceMeta object for the QR reference.
-     */
+    public function onInvoicePreRender(InvoicePreRenderEvent $event): void
+    {
+        $model = $event->getModel();
+        $reference = $this->qrService->generateQrCode($model);
+        $model->setOption('qr_reference', $reference);
+    }
+
     private function createQrReferenceMeta(): MetaTableTypeInterface
     {
         $meta = new InvoiceMeta();
@@ -81,12 +86,6 @@ class InvoiceSubscriber implements EventSubscriberInterface
         return $meta;
     }
 
-    public function onInvoicePreRender(InvoicePreRenderEvent $event): void
-    {
-        $model = $event->getModel();
-        $reference = $this->qrService->generateQrCode($model);
-    }
-
     public function onInvoiceMetaDefinition(InvoiceMetaDefinitionEvent $event): void
     {
         $event->getEntity()->setMetaField($this->createQrReferenceMeta());
@@ -96,4 +95,4 @@ class InvoiceSubscriber implements EventSubscriberInterface
     {
         $event->addField($this->createQrReferenceMeta());
     }
-} 
+}

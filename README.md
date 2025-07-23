@@ -20,37 +20,38 @@ Its either compatible with a normal IBAN or a QR-IBAN.
 
 1. **Copy the plugin**
 
-        ```bash
-        cd var/plugins/
-        git clone https://github.com/eudo1111/kimai-swiss-qr.git SwissQrBundle
-        ```
+```bash
+cd var/plugins/
+git clone https://github.com/eudo1111/kimai-swiss-qr.git SwissQrBundle
+```
 
 2. **Install dependencies**
 
 Run `composer install` inside the `SwissQrBundle` directory if not already done.
 
-        ```bash
-        cd SwissQrBundle
-        composer install
-        ```
+```bash
+cd SwissQrBundle
+composer install
+```
 
 3. **Clear the cache**
 
 From your Kimai root directory, run:
 
-        ```bash 
-        bin/console kimai:reload
-        ```
+```bash 
+bin/console kimai:reload
+```
 
 ## Usage
 
-1. As kimai has no structured address, please make sure that your and the 
+1. As kimai has no structured address, please make sure that your and the
 customers address last two lines are like this:
 
-        ```
-        Examplestreet 1
-        1234 City
-        ```
+```
+Examplestreet 1
+1234 City
+```
+
 2. The field PaymentDetails in your invoice-template-form must be your IBAN:
 
     * Normal IBAN: Enter you normal IBAN and the qr-reference will start with "RF..."
@@ -67,13 +68,15 @@ combination with the qr-iban.
 
 3. To display the QR code, use the following code in your invoice template
 
-        ```html
-          <div class="ch_qrcode">
-            <img src="data:image/svg+xml;base64,{{ invoice['invoice.swiss_qr_code'] }}" alt="Swiss QR Code"/>
-          </div>
-        ```
+```html
+  <div class="ch_qrcode">
+    <img src="data:image/svg+xml;base64,{{ invoice['invoice.swiss_qr_code'] }}" alt="Swiss QR Code"/>
+  </div>
+```
 
 4. To display the QR reference: `invoice['invoice.swiss_qr_reference']`
+5. Or use the template under `invoice\qr-template.html.twig` and copy it
+to the kimai invoice folder: `var/invoices`
 
 ## Credits
 

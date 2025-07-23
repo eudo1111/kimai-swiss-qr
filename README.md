@@ -1,43 +1,85 @@
 # SwissQrBundle for Kimai
 
-SwissQrBundle is a Kimai plugin that enables automatic generation and embedding of Swiss QR-bill payment references for invoices, using the [sprain/swiss-qr-bill](https://github.com/sprain/php-swiss-qr-bill) library.
+SwissQrBundle is a Kimai plugin that enables automatic generation and embedding
+of Swiss QR-bill payment references for invoices, using the
+[sprain/swiss-qr-bill](https://github.com/sprain/php-swiss-qr-bill) library.
+Its either compatible with a normal IBAN or a QR-IBAN.
 
 ## Features
-- Generates QR pictures stored under var/data/qrcodes
-- Provides the QR pictures as an endpoint under https://{your-kimai-instance}/qrcodes/{invoice-number}.png
-- Stores the QR reference as invoice meta data
+
+* Generates a QR-Code as base64 `invoice.swiss_qr_code`
+* Generates the coresponding QR-reference `invoice.swiss_qr_reference`
 
 ## Requirements
-- Kimai >= 2.17
-- PHP >= 8.0
-- [sprain/swiss-qr-bill](https://github.com/sprain/php-swiss-qr-bill)
+
+* Kimai >= 2.17
+* PHP >= 8.0
+* [sprain/swiss-qr-bill](https://github.com/sprain/php-swiss-qr-bill)
 
 ## Installation
+
 1. **Copy the plugin**
-   - Place the `SwissQrBundle` folder into your Kimai installation at `var/plugins/SwissQrBundle`.
+
+        ```bash
+        cd var/plugins/
+        git clone https://github.com/eudo1111/kimai-swiss-qr.git SwissQrBundle
+        ```
 
 2. **Install dependencies**
-   - Run `composer install` inside the `SwissQrBundle` directory if not already done.
+
+Run `composer install` inside the `SwissQrBundle` directory if not already done.
+
+        ```bash
+        cd SwissQrBundle
+        composer install
+        ```
 
 3. **Clear the cache**
-   - From your Kimai root directory, run:
-     ```
-     bin/console kimai:reload
-     ```
 
-4. **Set permissions**
-   - Ensure the web server user can write to `var/data/qrcodes` (for storing QR code images).
+From your Kimai root directory, run:
+
+        ```bash 
+        bin/console kimai:reload
+        ```
 
 ## Usage
-- When you preview, create or update an invoice, the plugin will automatically generate a Swiss QR code and reference and store it as meta data.
-- The QR code image is saved in `var/data/qrcodes` and can be served via the `/qrcodes/{filename}` endpoint (requires authentication).
-- To display the QR reference or QR code in your invoice template, use the meta field or the provided option (e.g., `{{ invoice.meta.qr_reference }}`).
-- The field PaymentDetails in your invoice template form must be your IBAN (with or without dashes)
-- Address of your company and your customer must be set in the following format: Examplestreet 1 1234 City
+
+1. As kimai has no structured address, please make sure that your and the 
+customers address last two lines are like this:
+
+        ```
+        Examplestreet 1
+        1234 City
+        ```
+2. The field PaymentDetails in your invoice-template-form must be your IBAN:
+
+    * Normal IBAN: Enter you normal IBAN and the qr-reference will start with "RF..."
+    * QR-IBAN & QRR-ID: Enter your qr-iban/qrr-id and the qr-reference
+will be a 27 digits string
+
+        ```
+        CHXX XXXX XXXX XXXX XXXX X/000000
+        ```
+
+    * The qrr-id is an additional "reference-code" which must be used in
+combination with the qr-iban.
+    * The qr-iban is a special iban provided by your bank.
+
+3. To display the QR code, use the following code in your invoice template
+
+        ```html
+          <div class="ch_qrcode">
+            <img src="data:image/svg+xml;base64,{{ invoice['invoice.swiss_qr_code'] }}" alt="Swiss QR Code"/>
+          </div>
+        ```
+
+4. To display the QR reference: `invoice['invoice.swiss_qr_reference']`
 
 ## Credits
-- [sprain/swiss-qr-bill](https://github.com/sprain/php-swiss-qr-bill)
-- [HansPaulHansen/swissqr](https://github.com/HansPaulHansen/swissqr)
+
+* [sprain/swiss-qr-bill](https://github.com/sprain/php-swiss-qr-bill)
+* [HansPaulHansen/swissqr](https://github.com/HansPaulHansen/swissqr)
 
 ## License
-MIT 
+
+MIT

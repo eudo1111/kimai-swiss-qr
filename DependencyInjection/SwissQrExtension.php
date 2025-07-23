@@ -14,9 +14,4 @@ class SwissQrExtension extends Extension
         $loader = new Loader\YamlFileLoader($container, new FileLocator(__DIR__ . '/../Resources/config'));
         $loader->load('services.yaml');
     }
-
-    public function getAlias(): string
-    {
-        return 'swiss_qr';
-    }
 } 

@@ -1,3 +1,0 @@
-controllers:
-    resource: '@SwissQrBundle/Controller/'
-    type: attribute

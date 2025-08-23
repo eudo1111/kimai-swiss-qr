@@ -1,9 +1,9 @@
 {
   "name": "eudo1111/kimai-swiss-qr",
   "description": "Swiss QR Code generation for Kimai invoices",
-  "homepage": "https://dorn.io",
+  "homepage": "https://dolux.ch/services/kimai-swiss-qr-code/",
   "type": "kimai-plugin",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "keywords": [
       "kimai",
       "kimai-plugin"
@@ -14,8 +14,8 @@
   "license": "MIT",
   "authors": [
       {
-          "name": "E. D",
-          "homepage": "https://dorn.io"
+          "name": "E. Dorn",
+          "homepage": "https://dolux.ch"
       }
   ],
   "extra": {

@@ -10,39 +10,34 @@ use Sprain\SwissQrBill\DataGroup\Element\StructuredAddress;
 use Sprain\SwissQrBill\DataGroup\Element\PaymentAmountInformation;
 use Sprain\SwissQrBill\Reference\RfCreditorReferenceGenerator;
 use Sprain\SwissQrBill\Reference\QrPaymentReferenceGenerator;
-use Sprain\SwissQrBill\DataGroup\Element\AdditionalInformation;
 use Sprain\SwissQrBill\QrBill;
 use Sprain\SwissQrBill\QrCode\QrCode;
-use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use App\Utils\FileHelper;
+use App\Invoice\InvoiceModelHydrator;
 
 use Exception;
-
-class SwissQrService
+class SwissQrService implements InvoiceModelHydrator
 {
-    private $params;
-    private FileHelper $fileHelper;
 
-    public function __construct(ParameterBagInterface $params, FileHelper $fileHelper)
+    public function __construct()
     {
-        $this->params = $params;
-        $this->fileHelper = $fileHelper;
     }
 
-    public function generateQrCode($invoice): string
-    {
-        if ($invoice instanceof InvoiceModel) {
-            return $this->generateQrCodeFromModel($invoice);
-        }
-        
-        if ($invoice instanceof Invoice) {
-            return $this->generateQrCodeFromInvoice($invoice);
-        }
+    /**
+     * @param InvoiceModel $model
+     * @return array
+     */
 
-        throw new \InvalidArgumentException('Invalid invoice type provided');
-    }
+     public function hydrate(InvoiceModel $model): array
+     {
+        $qrInfo = $this->generateQrCodeFromModel($model);
+        return [
+            'invoice.swiss_qr_reference' => $qrInfo['qrReference'],
+            'invoice.swiss_qr_code' => $qrInfo['qrCode'],
+            'template.payment_details' => $qrInfo['iban'],
+        ];
+     }
 
-    private function generateQrCodeFromModel(InvoiceModel $model): string
+    private function generateQrCodeFromModel(InvoiceModel $model): array
     {
         $customer = $model->getCustomer();
         $template = $model->getTemplate();
@@ -55,20 +50,7 @@ class SwissQrService
         );
     }
 
-    private function generateQrCodeFromInvoice(Invoice $invoice): string
-    {
-        $customer = $invoice->getCustomer();
-        $template = $customer->getInvoiceTemplate();
-
-        return $this->createQrCode(
-            $invoice->getInvoiceNumber(),
-            $invoice->getTotal(),
-            $customer,
-            $template
-        );
-    }
-
-    private function createQrCode(string $invoiceNumber, float $total, $customer, $template): string
+    private function createQrCode(string $invoiceNumber, float $total, $customer, $template): array
     {
 
         // Check if there are any "/" in the invoice number
@@ -118,11 +100,11 @@ class SwissQrService
         );
         $qrBill->setUltimateDebtor($debtor);
 
-        $besrId = "";
+        $qrrId = "";
         if (strpos($paymentDetails, '/') !== false) {
-            $besrId = explode('/', $paymentDetails)[1];
+            $qrrId = explode('/', $paymentDetails)[1];
             $iban = explode('/', $paymentDetails)[0];
-            $qrBill->setPaymentReference(PaymentReference::create(PaymentReference::TYPE_QR, QrPaymentReferenceGenerator::generate($besrId, $cleanInvoiceNumber)));
+            $qrBill->setPaymentReference(PaymentReference::create(PaymentReference::TYPE_QR, QrPaymentReferenceGenerator::generate($qrrId, $cleanInvoiceNumber)));
         } else {
             $iban = $paymentDetails;
             $qrBill->setPaymentReference(PaymentReference::create(PaymentReference::TYPE_SCOR, RfCreditorReferenceGenerator::generate($cleanInvoiceNumber)));
@@ -133,22 +115,15 @@ class SwissQrService
 
         // Add payment information
         $qrBill->setPaymentAmountInformation(PaymentAmountInformation::create($customer->getCurrency(), $total));
-        $qrBill->setAdditionalInformation(AdditionalInformation::create($template->getPaymentTerms()));
 
         // Generate QR Code
         try {
             $qrCode = $qrBill->getQrCode();
-
-            // Convert QrCode object to image data and then to base64 string
-            $image = $qrCode->getAsString();
-
-            // Generate a unique filename, e.g. using the invoice number
-            $filename = $this->fileHelper->getDataDirectory('qrcodes') . FileHelper::convertToAsciiFilename($cleanInvoiceNumber);
-
-            // Save the QR code image as a file
-            $this->fileHelper->saveFile($filename . '.png', $image);
-
-            return $qrBill->getPaymentReference()->getReference();
+            // Convert QrCode object to image data
+            $qrInfo['qrCode'] = base64_encode($qrCode->getAsString());
+            $qrInfo['qrReference'] = $qrBill->getPaymentReference()->getReference();
+            $qrInfo['iban'] = $iban;
+            return $qrInfo;
         } catch (\Exception $e) {
             $messages = [];
             foreach ($qrBill->getViolations() as $violation) {
@@ -160,31 +135,56 @@ class SwissQrService
         }
     }
 
-    /**
-     * Parses an address string in the format:
-     *   'StreetName BuildingNumber\nPostalCode City'
-     * Returns array: [street, buildingNumber, postal, city]
-     */
     private function parseAddress($address)
     {
+        // 1. Initialize variables to their default empty state.
         $street = $buildingNumber = $postal = $city = '';
-        if (empty($address)) {
+    
+        // 2. If the input is empty, null, or just whitespace, return the empty set.
+        if (empty(trim($address))) {
             return [$street, $buildingNumber, $postal, $city];
         }
-        $lines = preg_split('/\r?\n/', trim($address));
-        if (count($lines) >= 1) {
-            $firstLineParts = preg_split('/\s+/', trim($lines[0]), 2);
-            $street = $firstLineParts[0] ?? '';
-            $buildingNumber = $firstLineParts[1] ?? '';
+    
+        // 3. Split the address into lines and remove any blank lines.
+        $allLines = preg_split('/\r?\n/', $address);
+        $filteredLines = array_filter($allLines, 'trim');
+        if (empty($filteredLines)) {
+            return [$street, $buildingNumber, $postal, $city];
         }
-        if (count($lines) >= 2) {
-            if (preg_match('/(\d{4,6})\s*(.*)/', trim($lines[1]), $matches)) {
-                $postal = $matches[1];
-                $city = $matches[2];
+        // Re-index the array to be contiguous
+        $lines = array_values($filteredLines);
+    
+        // 4. Take only the last two lines for parsing.
+        // array_slice handles cases where there are fewer than 2 lines gracefully.
+        $addressLines = array_slice($lines, -2);
+        $lineCount = count($addressLines);
+    
+        // 5. The last available line is always parsed for postal code and city.
+        // This will be at index 0 if there's only one line, or index 1 if there are two.
+        $lastLine = $addressLines[$lineCount - 1];
+        if (preg_match('/(\d{4,6})\s*(.*)/', trim($lastLine), $matches)) {
+            $postal = $matches[1];
+            $city = trim($matches[2]);
+        } else {
+            // If no postal code is found, assume the whole line is the city.
+            $city = trim($lastLine);
+        }
+    
+        // 6. If there are at least two lines, parse the second-to-last for street info.
+        if ($lineCount >= 2) {
+            $streetLine = $addressLines[0];
+            // This regex is more robust, capturing multi-word street names correctly.
+            // It identifies the last "word" as the building number.
+            if (preg_match('/^(.*?)\s+([\w\d\-\/]+)$/', trim($streetLine), $matches)) {
+                $street = trim($matches[1]);
+                $buildingNumber = trim($matches[2]);
             } else {
-                $city = trim($lines[1]);
+                // If the pattern doesn't match (e.g., just one word), assume it's the street.
+                $street = trim($streetLine);
             }
         }
+    
+        // 7. Return the parsed components.
         return [$street, $buildingNumber, $postal, $city];
     }
-} 
+}

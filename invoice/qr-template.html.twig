@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+{% set ch_fontFamily = ch_fontFamily|default("'Helvetica', sans-serif") %}
+{% set ch_swissqr_ref = invoice['invoice.swiss_qr_reference']|default("") %}
+{% set fallback = app.request is not null ? app.request.locale : 'en' %}
+{% set language = model.template.language|default(fallback) %}
+<html lang="{{ language }}">
+<head>
+    <meta charset="utf-8">
+    <title>{{ model.invoiceNumber }}-{{ model.customer.company|default(model.customer.name)|u.snake }}</title>
+    <style type="text/css">
+        {{ encore_entry_css_source('invoice')|raw }}
+        	{% block invoice_styles %}
+			@page {
+				margin-top: 45mm;
+				margin-bottom: 30mm;
+			}
+
+			.item-table {
+				width: 100%;
+			}
+
+			tbody, td, tfoot, th, thead, tr {
+    		border: none;
+    		border-color: none;
+			}
+
+			.table>:not(caption)>*>* {
+				padding: 0rem;
+			}
+
+			.mb-1 {
+				margin-bottom: 1rem;
+			}
+
+			.mt-1 {
+				margin-top: 1rem;
+			}
+
+			.logo-main {
+				width: 20%;
+				margin-bottom: 2rem;
+			}
+
+			.firma {
+				text-decoration: underline;
+        font-size: x-small;
+			}
+
+			address {
+				margin-bottom: .5rem
+			}
+					
+			.ch_zahlteilfeld_header {
+				position: absolute;
+				left: 67mm;
+				top: 199mm;
+				font-size: 10.5pt;
+				font-weight: bold;
+				font-family: {{ ch_fontFamily|raw }} !important;
+			}
+			
+			.ch_empfansscheinfeld_header {
+				position: absolute;
+				left: 5.5mm;
+				top: 199mm;
+				font-size: 10.5pt;
+				font-weight: bold;
+				font-family: {{ ch_fontFamily|raw }} !important;
+			}
+			
+			.ch_qrcode {
+				height: 46mm;
+				width: 46mm;
+				position: absolute;
+				left: 67mm;
+				top: 209mm;
+				z-index: 1;
+			}
+
+			.ch_qrcode img {
+				width: 100%;
+			}
+
+			.ch_qrcode_swiss {
+				height: 46mm;
+				width: 46mm;
+				position: absolute;
+				left: 67mm;
+				top: 209mm;
+				z-index: 200;
+			}
+						
+			.ch_empfansscheinfeld {
+				position: absolute;
+				top: 192mm;
+				left: 0mm;
+				height: 105mm;
+				width:62mm;
+				border-right: 1pt dotted black;
+				border-top: 1pt dotted black;
+			}
+			
+			.ch_zahlteilfeld {
+				position: absolute;
+				top: 192mm;
+				left: 62mm;
+				height: 105mm;
+				width: 148mm;
+				border-top: 1pt dotted black;
+			}
+			
+			.ch_empfansscheinfeld_label {
+				font-size: 6pt;
+				font-weight: bold;
+				line-height: 7pt !important;
+				height: 2.6mm;
+				width: 100%;
+				vertical-align: top;
+				font-family: {{ ch_fontFamily|raw }} !important;
+			}
+			
+			.ch_empfansscheinfeld_fliesstext {
+				font-size: 8pt;
+				font-weight: light;
+				line-height: 9.2pt !important;
+				width: 100%;
+				vertical-align: top;
+				padding-bottom: 4mm;
+				font-family: {{ ch_fontFamily|raw }} !important;
+			}
+						
+			.ch_empfansscheinfeld_text_block {
+				position: absolute;
+				top: 205mm;
+				left: 5.5mm;
+				width: 55mm;
+			}
+			
+			.ch_empfansscheinfeld_waehrung_block {
+				position: absolute;
+				top: 261mm;
+				left: 5.5mm;
+				width: 10mm;
+			}
+			 
+			.ch_empfansscheinfeld_betrag_block {
+				position: absolute;
+				top: 261mm;
+				left: 17.2mm;
+			}
+			
+			.ch_empfansscheinfeld_annahmestelle {
+				position: absolute;
+				top: 275.5mm;
+				left: 42mm;
+				font-size: 6pt;
+				font-weight: bold;
+				line-height: 7pt !important;
+				font-family: {{ ch_fontFamily|raw }} !important;
+			}
+
+			.ch_zahlteilfeld_label {
+				font-size: 8pt;
+				font-weight: bold;
+				line-height: 9.2pt !important;	
+				height: 3.4mm;
+				width: 100%;
+				vertical-align: top;
+				font-family: {{ ch_fontFamily|raw }} !important;
+			}
+			
+			.ch_zahlteilfeld_fliesstext {
+				font-size: 10pt;
+				font-weight: light;
+				line-height: 11.5pt !important;
+				width: 100%;
+				vertical-align: top;
+				padding-bottom: 5mm;
+				font-family: {{ ch_fontFamily|raw }} !important;
+			} 
+
+			.ch_zahlteilfeld_text_block {
+				position: absolute;
+				left: 118mm;
+				top: 198mm;
+				width: 90mm;
+			}
+
+			.ch_zahlteilfeld_waehrung_block {
+				position: absolute;
+				left: 67mm;
+				top: 261mm;
+				width: 14mm;
+			}
+			
+			.ch_zahlteilfeld_betrag_block {
+				position: absolute;
+				left: 83mm;
+				top: 261mm;
+				width: 90mm;
+			}
+	{% endblock %}
+    </style>
+</head>
+<body class="invoice_print">
+    <div class="wrapper">
+        <section class="invoice">
+            {% set isDecimal = true %}
+            {% set currency = model.currency %}
+            {% set project = model.query.project %}
+            <div class="row mb-1">
+                <div class="col-xs-12">
+								<img class="logo-main" src="https://your-website.ch/logo.webp" alt="logo">
+                </div>
+            </div>
+
+						<div class="row mt-1 mb-1">
+                <div class="col-sm-6"></div>
+                <div class="col-sm-6 mt-1">
+                    <address class="firma" contenteditable="true">
+                        <strong>{{ model.template.company }}, </strong>
+                        {{ model.template.address|trim }}
+                    </address>
+                    <address contenteditable="true">
+                        <strong>{{ model.customer.company|default(model.customer.name) }}</strong><br>
+                        {{ model.customer.address|nl2br }}
+                        {% if model.customer.vatId is not empty %}
+                            <br>
+                            {{ 'vat_id'|trans }}: {{ model.customer.vatId }}
+                        {% endif %}
+                    </address>
+                </div>
+						</div>
+
+            <div class="row">
+              <div class="col-sm-12">
+								<h2 class="page-header">
+                  <span contenteditable="true">{{ model.template.title }} - {{invoice['query.end_month']}} {{invoice['query.end_year']}}</span>
+                </h2>
+							</div>
+            </div>
+            <div class="row">
+                <div class="col-xs-12">
+                    {% if model.template.paymentTerms is not empty %}
+                        <div contenteditable="true" class="paymentTerms">
+                            {{ model.template.paymentTerms|md2html }}
+														<br>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row invoice-items mb-3">
+                <div class="col-xs-12 table-responsive">
+                    <table class="table-sm item-table">
+                        <thead>
+                        <tr>
+                            <th>{{ 'date'|trans }}</th>
+                            <th>{{ 'description'|trans }}</th>
+                            <th class="text-end">{{ 'unit_price'|trans }}</th>
+                            <th class="text-end">{{ 'amount'|trans }}</th>
+                            <th class="text-end">{{ 'total_rate'|trans }}</th>
+                        </tr>
+                        </thead>
+                        <tbody style="border-bottom-style: groove; border-top-style: groove">
+                        {% for entry in model.calculator.entries %}
+                            {% set duration = entry.duration|duration(isDecimal) %}
+                            {% if entry.fixedRate %}
+                                {% set rate = entry.fixedRate %}
+                                {% set duration = entry.amount|amount %}
+                            {% else %}
+                                {% set rate = entry.hourlyRate %}
+                            {% endif %}
+                            <tr>
+                                <td nowrap class="text-nowrap">{{ entry.begin|date_short }}</td>
+                                <td contenteditable="true">
+                                    {% if entry.description is not empty %}
+                                        {{ entry.description|nl2br }}
+                                    {% endif %}
+                                </td>
+                                <td nowrap class="text-nowrap text-end">{{ rate|money(currency) }}</td>
+                                <td nowrap class="text-nowrap text-end">{{ duration }}</td>
+                                <td nowrap class="text-nowrap text-end">{{ entry.rate|money(currency) }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                        <tfoot>
+                        {% if model.calculator.tax > 0 or not model.isHideZeroTax() %}
+                            <tr>
+                                <td colspan="4" class="text-end">
+                                    {{ 'invoice.subtotal'|trans }}
+                                </td>
+                                <td class="text-end">{{ model.calculator.subtotal|money(currency) }}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="text-end">
+                                    {{ 'invoice.tax'|trans }} ({{ model.calculator.vat }}%)
+                                </td>
+                                <td class="text-end">{{ model.calculator.tax|money(currency) }}</td>
+                            </tr>
+                        {% endif %}
+                        <tr>
+                            <td colspan="4" class="text-end text-nowrap">
+                                <strong>{{ 'invoice.total'|trans }}</strong>
+                            </td>
+                            <td class="text-end">
+                                <strong>{{ model.calculator.total|money(currency) }}</strong>
+                            </td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+					{% block ch_qrcodefeld %}
+						{% block ch_qrcode_empfangssteil %}
+							<div class="ch_empfansscheinfeld"></div>
+							<div class="ch_empfansscheinfeld_header">
+								<strong>Empfangsschein</strong>
+							</div>
+							<div class="ch_empfansscheinfeld_text_block">
+								<div class="ch_empfansscheinfeld_label">
+									<strong>Konto / Zahlbar an</strong>
+								</div>
+								<div class="ch_empfansscheinfeld_fliesstext">
+									{{ invoice['template.payment_details'] }}<br>
+									{{ invoice['template.company'] }}<br>
+									{{ invoice['template.address']|nl2br  }}
+								</div>
+								{% if ch_swissqr_ref is not empty %}	
+									<div class="ch_empfansscheinfeld_label">
+										<strong>Referenz</strong>
+									</div>
+									<div class="ch_empfansscheinfeld_fliesstext">
+										{{ ch_swissqr_ref }}
+									</div>
+								{% endif %}
+								<div class="ch_empfansscheinfeld_label">
+									<strong>Zahlbar durch</strong>
+								</div>
+								<div class="ch_empfansscheinfeld_fliesstext">
+									{{ invoice['customer.name'] }}<br>
+									{{ invoice['customer.address']|nl2br }}<br>
+									{{ invoice['customer.country']|country_name }}
+								</div>
+							</div>
+
+							<div class="ch_empfansscheinfeld_waehrung_block">
+								<div class="ch_empfansscheinfeld_label">
+									<strong>Währung</strong>
+								</div>
+								<div class="ch_empfansscheinfeld_fliesstext">
+									{{ invoice['invoice.currency'] }}
+								</div>
+							</div>
+
+							<div class="ch_empfansscheinfeld_betrag_block">
+								<div class="ch_empfansscheinfeld_label">
+									<strong>Betrag</strong>
+								</div>
+								<div class="ch_empfansscheinfeld_fliesstext">
+									{{ invoice['invoice.total_nc'] }}
+							</div>
+							</div>
+							<div class="ch_empfansscheinfeld_annahmestelle">
+								<strong>Annahmestelle</strong>
+							</div>
+						{% endblock %}
+
+						{% block ch_qrcode_zahlteil %}
+							<div class="ch_zahlteilfeld"></div>
+							<div class="ch_zahlteilfeld_header">
+								<strong>Zahlteil</strong>
+							</div>
+							<div class="ch_qrcode">
+								<img src="data:image/svg+xml;base64,{{ invoice['invoice.swiss_qr_code'] }}" alt="Swiss QR Code"/>
+							</div>
+							<div class="ch_zahlteilfeld_text_block">
+								<div class="ch_zahlteilfeld_label">
+									<strong>Konto / Zahlbar an</strong>
+								</div>
+								<div class="ch_zahlteilfeld_fliesstext">
+									{{ invoice['template.payment_details'] }}<br>
+									{{ invoice['template.company'] }}<br>
+									{{ invoice['template.address']|nl2br }}<br>
+								</div>
+
+								{% if ch_swissqr_ref is not empty is not empty %}	
+									<div class="ch_zahlteilfeld_label">
+										<strong>Referenz</strong>
+									</div>
+									<div class="ch_zahlteilfeld_fliesstext">
+										{{ ch_swissqr_ref }}
+									</div>
+								{% endif %}
+
+								{% if (invoice['project.comment'] is not empty) and (invoice['project.name'] is not empty) %}	
+									<div class="ch_zahlteilfeld_label">
+										<strong>Zusätzliche Information</strong>
+									</div>
+									<div class="ch_zahlteilfeld_fliesstext">
+										{% if invoice['project.comment'] is not empty %}	
+											{{ invoice['project.comment'] }}
+										{% else %}
+											{{ invoice['project.name'] }}
+										{% endif %} 
+									</div>
+								{% endif %}
+
+								<div class="ch_zahlteilfeld_label">
+									<strong>Zahlbar durch</strong>
+								</div>
+								<div class="ch_zahlteilfeld_fliesstext">
+									{{ invoice['customer.name'] }}<br>
+									{{ invoice['customer.address']|nl2br }}<br>
+									{{ invoice['customer.country']|country_name }}
+								</div>
+							</div>
+
+							<div class="ch_zahlteilfeld_waehrung_block">
+								<div class="ch_zahlteilfeld_label">
+									<strong>Währung</strong>
+								</div>
+								<div class="ch_zahlteilfeld_fliesstext">
+									{{ invoice['invoice.currency'] }}
+								</div>
+							</div>
+
+							<div class="ch_zahlteilfeld_betrag_block">
+								<div class="ch_zahlteilfeld_label">
+									<strong>Betrag</strong>
+								</div>
+								<div class="ch_zahlteilfeld_fliesstext">
+									{{ invoice['invoice.total_nc']  }}
+								</div>
+							</div>
+						{% endblock %}
+					{% endblock %}
+        </section>
+    </div>
+	</body>
+</html>

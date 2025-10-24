@@ -9,7 +9,8 @@
       "kimai-plugin"
   ],
   "require": {
-    "sprain/swiss-qr-bill": "^4.0"
+    "sprain/swiss-qr-bill": "^4.0",
+    "endroid/qr-code": "^4.4.4"
   },
   "license": "MIT",
   "authors": [

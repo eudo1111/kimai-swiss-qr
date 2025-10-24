@@ -4,17 +4,12 @@ namespace KimaiPlugin\SwissQrBundle\Service;
 
 use App\Entity\Invoice;
 use App\Invoice\InvoiceModel;
-use Sprain\SwissQrBill\DataGroup\Element\CreditorInformation;
-use Sprain\SwissQrBill\DataGroup\Element\PaymentReference;
-use Sprain\SwissQrBill\DataGroup\Element\StructuredAddress;
-use Sprain\SwissQrBill\DataGroup\Element\PaymentAmountInformation;
-use Sprain\SwissQrBill\Reference\RfCreditorReferenceGenerator;
-use Sprain\SwissQrBill\Reference\QrPaymentReferenceGenerator;
-use Sprain\SwissQrBill\QrBill;
-use Sprain\SwissQrBill\QrCode\QrCode;
 use App\Invoice\InvoiceModelHydrator;
-
+use Sprain\SwissQrBill as QrBill;
 use Exception;
+
+require_once __DIR__.'/../vendor/autoload.php';
+
 class SwissQrService implements InvoiceModelHydrator
 {
 
@@ -61,7 +56,7 @@ class SwissQrService implements InvoiceModelHydrator
         // Remove all "-" from the invoice number
         $cleanInvoiceNumber = str_replace('-', '', $invoiceNumber);
         // Create QR Bill
-        $qrBill = QrBill::create();
+        $qrBill = QrBill\QrBill::create();
 
         $paymentDetails = $template->getPaymentDetails();
         $country = null;
@@ -76,7 +71,7 @@ class SwissQrService implements InvoiceModelHydrator
         list($street, $buildingNumber, $postal, $city) = $this->parseAddress($template->getAddress());
 
         // Add creditor information
-        $creditor = StructuredAddress::createWithStreet(
+        $creditor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
             $template->getCompany(),
             $street,
             $buildingNumber,
@@ -90,7 +85,7 @@ class SwissQrService implements InvoiceModelHydrator
         list($debtorStreet, $debtorBuildingNumber, $debtorPostal, $debtorCity) = $this->parseAddress($customer->getAddress());
 
         // Add debtor information
-        $debtor = StructuredAddress::createWithStreet(
+        $debtor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
             $customer->getName(),
             $debtorStreet,
             $debtorBuildingNumber,
@@ -104,17 +99,17 @@ class SwissQrService implements InvoiceModelHydrator
         if (strpos($paymentDetails, '/') !== false) {
             $qrrId = explode('/', $paymentDetails)[1];
             $iban = explode('/', $paymentDetails)[0];
-            $qrBill->setPaymentReference(PaymentReference::create(PaymentReference::TYPE_QR, QrPaymentReferenceGenerator::generate($qrrId, $cleanInvoiceNumber)));
+            $qrBill->setPaymentReference(QrBill\DataGroup\Element\PaymentReference::create(QrBill\DataGroup\Element\PaymentReference::TYPE_QR, QrBill\Reference\QrPaymentReferenceGenerator::generate($qrrId, $cleanInvoiceNumber)));
         } else {
             $iban = $paymentDetails;
-            $qrBill->setPaymentReference(PaymentReference::create(PaymentReference::TYPE_SCOR, RfCreditorReferenceGenerator::generate($cleanInvoiceNumber)));
+            $qrBill->setPaymentReference(QrBill\DataGroup\Element\PaymentReference::create(QrBill\DataGroup\Element\PaymentReference::TYPE_SCOR, QrBill\Reference\RfCreditorReferenceGenerator::generate($cleanInvoiceNumber)));
         }
-        $creditorInformation = CreditorInformation::create($iban);
+        $creditorInformation = QrBill\DataGroup\Element\CreditorInformation::create($iban);
 
         $qrBill->setCreditorInformation($creditorInformation);
 
         // Add payment information
-        $qrBill->setPaymentAmountInformation(PaymentAmountInformation::create($customer->getCurrency(), $total));
+        $qrBill->setPaymentAmountInformation(QrBill\DataGroup\Element\PaymentAmountInformation::create($customer->getCurrency(), $total));
 
         // Generate QR Code
         try {

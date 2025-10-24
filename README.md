@@ -38,7 +38,7 @@ composer install
 
 From your Kimai root directory, run:
 
-```bash 
+```bash
 bin/console kimai:reload
 ```
 
@@ -77,6 +77,12 @@ combination with the qr-iban.
 4. To display the QR reference: `invoice['invoice.swiss_qr_reference']`
 5. Or use the template under `invoice\qr-template.html.twig` and copy it
 to the kimai invoice folder: `var/invoices`
+
+```bash
+cp invoice/qr-template.html.twig ../../invoices/qr-bill.html.twig
+cd ../../../
+bin/console kimai:reload
+```
 
 ## Credits
 

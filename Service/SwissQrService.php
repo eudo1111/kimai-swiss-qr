@@ -69,21 +69,21 @@ class SwissQrService implements InvoiceModelHydrator
 
         // Parse creditor address
         $company = $template->getCustomer();
-        $address = '';
+        $companyAddress = '';
         if (!empty($company->getAddressLine3())) {
-            $address = $company->getAddressLine3();
+            $companyAddress = $company->getAddressLine3();
         } elseif (!empty($company->getAddressLine2())) {
-            $address = $company->getAddressLine2();
+            $companyAddress = $company->getAddressLine2();
         } elseif (!empty($company->getAddressLine1())) {
-            $address = $company->getAddressLine1();
+            $companyAddress = $company->getAddressLine1();
         } else {
             throw new \InvalidArgumentException('Company address is missing');
         }
-        $companyAddress = $this->extractBuildingNumber($address);
+        $companyAddressStructured = $this->extractBuildingNumber($companyAddress);
         $creditor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
             $company->getName(),
-            $companyAddress['address'],
-            $companyAddress['buildingNumber'],
+            $companyAddressStructured['address'],
+            $companyAddressStructured['buildingNumber'],
             $company->getPostCode(),
             $company->getCity(),
             $company->getCountry()
@@ -91,11 +91,21 @@ class SwissQrService implements InvoiceModelHydrator
         $qrBill->setCreditor($creditor);
 
         // Add debtor information
-        $customerAddress = $this->extractBuildingNumber($customer->getAddressLine3());
+        $customerAddress = '';
+        if (!empty($company->getAddressLine3())) {
+            $customerAddress = $customer->getAddressLine3();
+        } elseif (!empty($customer->getAddressLine2())) {
+            $customerAddress = $customer->getAddressLine2();
+        } elseif (!empty($customer->getAddressLine1())) {
+            $customerAddress = $customer->getAddressLine1();
+        } else {
+            throw new \InvalidArgumentException('Customer address is missing');
+        }
+        $customerAddressStructured = $this->extractBuildingNumber($customerAddress);
         $debtor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
             $customer->getName(),
-            $customerAddress['address'],
-            $customerAddress['buildingNumber'],
+            $customerAddressStructured['address'],
+            $customerAddressStructured['buildingNumber'],
             $customer->getPostCode(),
             $customer->getCity(),
             $customer->getCountry()

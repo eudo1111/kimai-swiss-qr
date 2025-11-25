@@ -12,7 +12,7 @@ Its either compatible with a normal IBAN or a QR-IBAN.
 
 ## Requirements
 
-* Kimai >= 2.17
+* Kimai >= 2.41
 * PHP >= 8.0
 * [sprain/swiss-qr-bill](https://github.com/sprain/php-swiss-qr-bill)
 
@@ -44,14 +44,7 @@ bin/console kimai:reload
 
 ## Usage
 
-1. As kimai has no structured address, please make sure that your and the
-customers address last two lines are like this:
-
-```
-Examplestreet 1
-1234 City
-```
-
+1. It takes the last not-empty line of the three address-lines as the street.
 2. The field PaymentDetails in your invoice-template-form must be your IBAN:
 
     * Normal IBAN: Enter you normal IBAN and the qr-reference will start with "RF..."

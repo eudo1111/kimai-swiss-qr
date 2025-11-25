@@ -68,29 +68,46 @@ class SwissQrService implements InvoiceModelHydrator
         }
 
         // Parse creditor address
-        list($street, $buildingNumber, $postal, $city) = $this->parseAddress($template->getAddress());
-
-        // Add creditor information
+        $company = $template->getCustomer();
+        $companyAddress = '';
+        if (!empty($company->getAddressLine3())) {
+            $companyAddress = $company->getAddressLine3();
+        } elseif (!empty($company->getAddressLine2())) {
+            $companyAddress = $company->getAddressLine2();
+        } elseif (!empty($company->getAddressLine1())) {
+            $companyAddress = $company->getAddressLine1();
+        } else {
+            throw new \InvalidArgumentException('Company address is missing');
+        }
+        $companyAddressStructured = $this->extractBuildingNumber($companyAddress);
         $creditor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
-            $template->getCompany(),
-            $street,
-            $buildingNumber,
-            $postal,
-            $city,
-            $country
+            $company->getName(),
+            $companyAddressStructured['address'],
+            $companyAddressStructured['buildingNumber'],
+            $company->getPostCode(),
+            $company->getCity(),
+            $company->getCountry()
         );
         $qrBill->setCreditor($creditor);
 
-        // Parse debtor address
-        list($debtorStreet, $debtorBuildingNumber, $debtorPostal, $debtorCity) = $this->parseAddress($customer->getAddress());
-
         // Add debtor information
+        $customerAddress = '';
+        if (!empty($company->getAddressLine3())) {
+            $customerAddress = $customer->getAddressLine3();
+        } elseif (!empty($customer->getAddressLine2())) {
+            $customerAddress = $customer->getAddressLine2();
+        } elseif (!empty($customer->getAddressLine1())) {
+            $customerAddress = $customer->getAddressLine1();
+        } else {
+            throw new \InvalidArgumentException('Customer address is missing');
+        }
+        $customerAddressStructured = $this->extractBuildingNumber($customerAddress);
         $debtor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
             $customer->getName(),
-            $debtorStreet,
-            $debtorBuildingNumber,
-            $debtorPostal,
-            $debtorCity,
+            $customerAddressStructured['address'],
+            $customerAddressStructured['buildingNumber'],
+            $customer->getPostCode(),
+            $customer->getCity(),
             $customer->getCountry()
         );
         $qrBill->setUltimateDebtor($debtor);
@@ -130,56 +147,20 @@ class SwissQrService implements InvoiceModelHydrator
         }
     }
 
-    private function parseAddress($address)
+    private function extractBuildingNumber(string $addressLine = null): array
     {
-        // 1. Initialize variables to their default empty state.
-        $street = $buildingNumber = $postal = $city = '';
-    
-        // 2. If the input is empty, null, or just whitespace, return the empty set.
-        if (empty(trim($address))) {
-            return [$street, $buildingNumber, $postal, $city];
+        $addressLine = trim($addressLine);
+        $buildingNumber = "";
+
+        if (preg_match('/\s(\d+(?:-\d+)?[a-zA-Z]?)$/', $addressLine, $matches)) {
+            $buildingNumber = $matches[1];
+            // Remove the building number from the address line
+            $addressLine = preg_replace('/\s' . preg_quote($buildingNumber, '/') . '$/', '', $addressLine);
         }
-    
-        // 3. Split the address into lines and remove any blank lines.
-        $allLines = preg_split('/\r?\n/', $address);
-        $filteredLines = array_filter($allLines, 'trim');
-        if (empty($filteredLines)) {
-            return [$street, $buildingNumber, $postal, $city];
-        }
-        // Re-index the array to be contiguous
-        $lines = array_values($filteredLines);
-    
-        // 4. Take only the last two lines for parsing.
-        // array_slice handles cases where there are fewer than 2 lines gracefully.
-        $addressLines = array_slice($lines, -2);
-        $lineCount = count($addressLines);
-    
-        // 5. The last available line is always parsed for postal code and city.
-        // This will be at index 0 if there's only one line, or index 1 if there are two.
-        $lastLine = $addressLines[$lineCount - 1];
-        if (preg_match('/(\d{4,6})\s*(.*)/', trim($lastLine), $matches)) {
-            $postal = $matches[1];
-            $city = trim($matches[2]);
-        } else {
-            // If no postal code is found, assume the whole line is the city.
-            $city = trim($lastLine);
-        }
-    
-        // 6. If there are at least two lines, parse the second-to-last for street info.
-        if ($lineCount >= 2) {
-            $streetLine = $addressLines[0];
-            // This regex is more robust, capturing multi-word street names correctly.
-            // It identifies the last "word" as the building number.
-            if (preg_match('/^(.*?)\s+([\w\d\-\/]+)$/', trim($streetLine), $matches)) {
-                $street = trim($matches[1]);
-                $buildingNumber = trim($matches[2]);
-            } else {
-                // If the pattern doesn't match (e.g., just one word), assume it's the street.
-                $street = trim($streetLine);
-            }
-        }
-    
-        // 7. Return the parsed components.
-        return [$street, $buildingNumber, $postal, $city];
+
+        return [
+            'address' => $addressLine,
+            'buildingNumber' => $buildingNumber
+        ];
     }
 }

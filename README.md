@@ -51,7 +51,7 @@ bin/console kimai:reload
     * QR-IBAN & QRR-ID: Enter your qr-iban/qrr-id and the qr-reference
 will be a 27 digits string
 
-        ```
+        ```text
         CHXX XXXX XXXX XXXX XXXX X/000000
         ```
 
@@ -61,21 +61,21 @@ combination with the qr-iban.
 
 3. To display the QR code, use the following code in your invoice template
 
-```html
-  <div class="ch_qrcode">
-    <img src="data:image/svg+xml;base64,{{ invoice['invoice.swiss_qr_code'] }}" alt="Swiss QR Code"/>
-  </div>
-```
+    ```html
+      <div class="ch_qrcode">
+        <img src="data:image/svg+xml;base64,{{ invoice['invoice.swiss_qr_code'] }}" alt="Swiss QR Code"/>
+      </div>
+    ```
 
 4. To display the QR reference: `invoice['invoice.swiss_qr_reference']`
 5. Or use the template under `invoice\qr-template.html.twig` and copy it
-to the kimai invoice folder: `var/invoices`
+to the kimai invoice folder: `var/invoices` (which must be created beforehand)
 
-```bash
-cp invoice/qr-template.html.twig ../../invoices/qr-bill.html.twig
-cd ../../../
-bin/console kimai:reload
-```
+    ```bash
+    cp invoice/qr-template.html.twig ../../invoices/qr-bill.html.twig
+    cd ../../../
+    bin/console kimai:reload
+    ```
 
 ## Credits
 

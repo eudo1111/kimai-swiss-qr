@@ -223,7 +223,7 @@
                     </address>
                     <address contenteditable="true">
                         <strong>{{ model.customer.company|default(model.customer.name) }}</strong><br>
-                        {{ model.customer.address|nl2br }}
+                        {{ invoice['customer.address']|nl2br }}
                         {% if model.customer.vatId is not empty %}
                             <br>
                             {{ 'vat_id'|trans }}: {{ model.customer.vatId }}

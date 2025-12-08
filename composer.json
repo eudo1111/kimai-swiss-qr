@@ -3,14 +3,15 @@
   "description": "Swiss QR Code generation for Kimai invoices",
   "homepage": "https://dolux.ch/services/kimai-swiss-qr-code/",
   "type": "kimai-plugin",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "keywords": [
       "kimai",
       "kimai-plugin"
   ],
   "require": {
     "sprain/swiss-qr-bill": "^4.0",
-    "endroid/qr-code": "^4.4.4"
+    "endroid/qr-code": "^4.4.4",
+    "phpseclib/bcmath_compat": "^2.0"
   },
   "license": "MIT",
   "authors": [

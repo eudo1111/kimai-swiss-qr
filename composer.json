@@ -3,7 +3,7 @@
   "description": "Swiss QR Code generation for Kimai invoices",
   "homepage": "https://dolux.ch/services/kimai-swiss-qr-code/",
   "type": "kimai-plugin",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "keywords": [
       "kimai",
       "kimai-plugin"

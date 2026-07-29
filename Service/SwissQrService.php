@@ -2,35 +2,57 @@
 
 namespace KimaiPlugin\SwissQrBundle\Service;
 
-use App\Entity\Invoice;
+use App\Entity\Customer;
+use App\Entity\InvoiceTemplate;
 use App\Invoice\InvoiceModel;
 use App\Invoice\InvoiceModelHydrator;
 use Sprain\SwissQrBill as QrBill;
-use Exception;
 
-require_once __DIR__.'/../vendor/autoload.php';
+require_once __DIR__ . '/../Resources/plugin-autoload.php';
 
 class SwissQrService implements InvoiceModelHydrator
 {
+    public const VAR_REFERENCE = 'invoice.swiss_qr_reference';
+    public const VAR_QR_CODE_SVG_B64 = 'invoice.swiss_qr_code';
+    public const VAR_QR_CODE_PNG_PATH = 'invoice.swiss_qr_code_png';
 
-    public function __construct()
+    /** Official Swiss QR-bill size in millimeters. */
+    public const QR_SIZE_MM = 46;
+
+    private ?QrBill\QrCode\QrCode $pendingQrCode = null;
+    private ?string $pngPath = null;
+
+    public function hydrate(InvoiceModel $model): array
     {
+        $qrInfo = $this->generateQrCodeFromModel($model);
+
+        // PNG path is intentionally omitted from Twig/toArray output. Office
+        // renderers obtain it via materializePngPath() only.
+        return [
+            self::VAR_REFERENCE => $qrInfo['qrReference'],
+            self::VAR_QR_CODE_SVG_B64 => $qrInfo['qrCodeSvgBase64'],
+            'template.payment_details' => $qrInfo['iban'],
+        ];
     }
 
     /**
-     * @param InvoiceModel $model
-     * @return array
+     * Creates (or reuses) a temp PNG for Office embedding. Never expose this
+     * path through invoice template variables.
      */
+    public function materializePngPath(): ?string
+    {
+        if ($this->pngPath !== null && is_file($this->pngPath)) {
+            return $this->pngPath;
+        }
 
-     public function hydrate(InvoiceModel $model): array
-     {
-        $qrInfo = $this->generateQrCodeFromModel($model);
-        return [
-            'invoice.swiss_qr_reference' => $qrInfo['qrReference'],
-            'invoice.swiss_qr_code' => $qrInfo['qrCode'],
-            'template.payment_details' => $qrInfo['iban'],
-        ];
-     }
+        if ($this->pendingQrCode === null) {
+            return null;
+        }
+
+        $this->pngPath = $this->writePngTempFile($this->pendingQrCode);
+
+        return $this->pngPath;
+    }
 
     private function generateQrCodeFromModel(InvoiceModel $model): array
     {
@@ -45,122 +67,135 @@ class SwissQrService implements InvoiceModelHydrator
         );
     }
 
-    private function createQrCode(string $invoiceNumber, float $total, $customer, $template): array
+    private function createQrCode(string $invoiceNumber, float $total, Customer $customer, InvoiceTemplate $template): array
     {
-
-        // Check if there are any "/" in the invoice number
         if (strpos($invoiceNumber, '/') !== false) {
             throw new \InvalidArgumentException('There are invalid characters in your invoice number');
         }
 
-        // Remove all "-" from the invoice number
         $cleanInvoiceNumber = str_replace('-', '', $invoiceNumber);
-        // Create QR Bill
         $qrBill = QrBill\QrBill::create();
 
-        $paymentDetails = $template->getPaymentDetails();
-        $country = null;
-
-        if (preg_match('/^[a-zA-Z]{2}/', $paymentDetails, $matches)) {
-            $country = $matches[0];
-        } else {
+        $paymentDetails = (string) $template->getPaymentDetails();
+        if (!preg_match('/^[a-zA-Z]{2}/', $paymentDetails)) {
             throw new \InvalidArgumentException('Payment details is not a valid IBAN number');
         }
 
-        // Parse creditor address
         $company = $template->getCustomer();
-        $companyAddress = '';
-        if (!empty($company->getAddressLine3())) {
-            $companyAddress = $company->getAddressLine3();
-        } elseif (!empty($company->getAddressLine2())) {
-            $companyAddress = $company->getAddressLine2();
-        } elseif (!empty($company->getAddressLine1())) {
-            $companyAddress = $company->getAddressLine1();
-        } else {
-            throw new \InvalidArgumentException('Company address is missing');
+        if ($company === null) {
+            throw new \InvalidArgumentException('Invoice template has no linked company/customer (creditor)');
         }
-        $companyAddressStructured = $this->extractBuildingNumber($companyAddress);
-        $creditor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
+
+        $creditorStreet = $this->resolveStreetLine($company);
+        $creditorStreetParts = $this->extractBuildingNumber($creditorStreet);
+        $qrBill->setCreditor(QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
             $company->getName(),
-            $companyAddressStructured['address'],
-            $companyAddressStructured['buildingNumber'],
+            $creditorStreetParts['address'],
+            $creditorStreetParts['buildingNumber'],
             $company->getPostCode(),
             $company->getCity(),
             $company->getCountry()
-        );
-        $qrBill->setCreditor($creditor);
+        ));
 
-        // Add debtor information
-        $customerAddress = '';
-        if (!empty($company->getAddressLine3())) {
-            $customerAddress = $customer->getAddressLine3();
-        } elseif (!empty($customer->getAddressLine2())) {
-            $customerAddress = $customer->getAddressLine2();
-        } elseif (!empty($customer->getAddressLine1())) {
-            $customerAddress = $customer->getAddressLine1();
-        } else {
-            throw new \InvalidArgumentException('Customer address is missing');
-        }
-        $customerAddressStructured = $this->extractBuildingNumber($customerAddress);
-        $debtor = QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
+        $debtorStreet = $this->resolveStreetLine($customer);
+        $debtorStreetParts = $this->extractBuildingNumber($debtorStreet);
+        $qrBill->setUltimateDebtor(QrBill\DataGroup\Element\StructuredAddress::createWithStreet(
             $customer->getName(),
-            $customerAddressStructured['address'],
-            $customerAddressStructured['buildingNumber'],
+            $debtorStreetParts['address'],
+            $debtorStreetParts['buildingNumber'],
             $customer->getPostCode(),
             $customer->getCity(),
             $customer->getCountry()
-        );
-        $qrBill->setUltimateDebtor($debtor);
+        ));
 
-        $qrrId = "";
         if (strpos($paymentDetails, '/') !== false) {
-            $qrrId = explode('/', $paymentDetails)[1];
-            $iban = explode('/', $paymentDetails)[0];
-            $qrBill->setPaymentReference(QrBill\DataGroup\Element\PaymentReference::create(QrBill\DataGroup\Element\PaymentReference::TYPE_QR, QrBill\Reference\QrPaymentReferenceGenerator::generate($qrrId, $cleanInvoiceNumber)));
+            [$iban, $qrrId] = explode('/', $paymentDetails, 2);
+            $qrBill->setPaymentReference(QrBill\DataGroup\Element\PaymentReference::create(
+                QrBill\DataGroup\Element\PaymentReference::TYPE_QR,
+                QrBill\Reference\QrPaymentReferenceGenerator::generate($qrrId, $cleanInvoiceNumber)
+            ));
         } else {
             $iban = $paymentDetails;
-            $qrBill->setPaymentReference(QrBill\DataGroup\Element\PaymentReference::create(QrBill\DataGroup\Element\PaymentReference::TYPE_SCOR, QrBill\Reference\RfCreditorReferenceGenerator::generate($cleanInvoiceNumber)));
+            $qrBill->setPaymentReference(QrBill\DataGroup\Element\PaymentReference::create(
+                QrBill\DataGroup\Element\PaymentReference::TYPE_SCOR,
+                QrBill\Reference\RfCreditorReferenceGenerator::generate($cleanInvoiceNumber)
+            ));
         }
-        $creditorInformation = QrBill\DataGroup\Element\CreditorInformation::create($iban);
 
-        $qrBill->setCreditorInformation($creditorInformation);
+        $qrBill->setCreditorInformation(QrBill\DataGroup\Element\CreditorInformation::create($iban));
+        $qrBill->setPaymentAmountInformation(
+            QrBill\DataGroup\Element\PaymentAmountInformation::create($customer->getCurrency(), $total)
+        );
 
-        // Add payment information
-        $qrBill->setPaymentAmountInformation(QrBill\DataGroup\Element\PaymentAmountInformation::create($customer->getCurrency(), $total));
-
-        // Generate QR Code
         try {
             $qrCode = $qrBill->getQrCode();
-            // Convert QrCode object to image data
-            $qrInfo['qrCode'] = base64_encode($qrCode->getAsString());
-            $qrInfo['qrReference'] = $qrBill->getPaymentReference()->getReference();
-            $qrInfo['iban'] = $iban;
-            return $qrInfo;
+            $this->pendingQrCode = $qrCode;
+            $this->pngPath = null;
+
+            return [
+                'qrCodeSvgBase64' => base64_encode($qrCode->getAsString(QrBill\QrCode\QrCode::FILE_FORMAT_SVG)),
+                'qrReference' => $qrBill->getPaymentReference()->getReference(),
+                'iban' => $iban,
+            ];
         } catch (\Exception $e) {
             $messages = [];
             foreach ($qrBill->getViolations() as $violation) {
-                // Use the property path as the field name, fallback to 'UnknownField' if empty
                 $field = $violation->getPropertyPath() ?: 'UnknownField';
                 $messages[] = $field . ': ' . $violation->getMessage();
             }
-            throw new \RuntimeException(implode('; ', $messages));
+
+            throw new \RuntimeException($messages !== [] ? implode('; ', $messages) : $e->getMessage(), 0, $e);
         }
     }
 
-    private function extractBuildingNumber(string $addressLine = null): array
+    private function writePngTempFile(QrBill\QrCode\QrCode $qrCode): string
     {
-        $addressLine = trim($addressLine);
-        $buildingNumber = "";
+        $tmp = tempnam(sys_get_temp_dir(), 'kimai-swiss-qr-');
+        if ($tmp === false) {
+            throw new \RuntimeException('Could not create temporary file for Swiss QR PNG');
+        }
+
+        $pngPath = $tmp . '.png';
+        @unlink($tmp);
+        $qrCode->writeFile($pngPath);
+
+        // Ensure the file is removed eventually; Office renderers read it during the same request.
+        register_shutdown_function(static function () use ($pngPath): void {
+            if (is_file($pngPath)) {
+                @unlink($pngPath);
+            }
+        });
+
+        return $pngPath;
+    }
+
+    private function resolveStreetLine(Customer $party): string
+    {
+        foreach ([$party->getAddressLine3(), $party->getAddressLine2(), $party->getAddressLine1()] as $line) {
+            if ($line !== null && trim($line) !== '') {
+                return trim($line);
+            }
+        }
+
+        throw new \InvalidArgumentException('Structured street address is missing for ' . $party->getName());
+    }
+
+    /**
+     * @return array{address: string, buildingNumber: string}
+     */
+    private function extractBuildingNumber(?string $addressLine): array
+    {
+        $addressLine = trim((string) $addressLine);
+        $buildingNumber = '';
 
         if (preg_match('/\s(\d+(?:-\d+)?[a-zA-Z]?)$/', $addressLine, $matches)) {
             $buildingNumber = $matches[1];
-            // Remove the building number from the address line
-            $addressLine = preg_replace('/\s' . preg_quote($buildingNumber, '/') . '$/', '', $addressLine);
+            $addressLine = preg_replace('/\s' . preg_quote($buildingNumber, '/') . '$/', '', $addressLine) ?? $addressLine;
         }
 
         return [
             'address' => $addressLine,
-            'buildingNumber' => $buildingNumber
+            'buildingNumber' => $buildingNumber,
         ];
     }
 }

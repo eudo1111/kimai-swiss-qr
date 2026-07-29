@@ -6,8 +6,43 @@ services:
 
     KimaiPlugin\SwissQrBundle\:
         resource: '../../*'
-        exclude: '../../{Resources,vendor}'
+        exclude: '../../{Resources,vendor,invoice-templates,Invoice}'
+
+    # Shared instance for hydrator + Office PNG materialization. Do not autoconfigure
+    # as InvoiceModelHydrator (would double-register with the PreRender subscriber).
+    KimaiPlugin\SwissQrBundle\Service\SwissQrService:
+        autoconfigure: false
 
     KimaiPlugin\SwissQrBundle\EventSubscriber\InvoiceSubscriber:
+        arguments:
+            $swissQrService: '@KimaiPlugin\SwissQrBundle\Service\SwissQrService'
         tags:
             - { name: kernel.event_subscriber }
+
+    # Replace Kimai office renderers so ${invoice.swiss_qr_code_png} is embedded as an image.
+    # PNG path is never exposed via Twig toArray(); only materializePngPath() supplies it.
+    KimaiPlugin\SwissQrBundle\Invoice\SwissQrDocxRenderer:
+        class: KimaiPlugin\SwissQrBundle\Invoice\SwissQrDocxRenderer
+        decorates: App\Invoice\Renderer\DocxRenderer
+        decoration_inner_name: 'App\Invoice\Renderer\DocxRenderer.inner'
+        arguments:
+            $inner: '@App\Invoice\Renderer\DocxRenderer.inner'
+            $swissQrService: '@KimaiPlugin\SwissQrBundle\Service\SwissQrService'
+        tags:
+            - { name: 'App\Invoice\RendererInterface' }
+
+    KimaiPlugin\SwissQrBundle\Invoice\SwissQrXlsxRenderer:
+        class: KimaiPlugin\SwissQrBundle\Invoice\SwissQrXlsxRenderer
+        decorates: App\Invoice\Renderer\XlsxRenderer
+        arguments:
+            $swissQrService: '@KimaiPlugin\SwissQrBundle\Service\SwissQrService'
+        tags:
+            - { name: 'App\Invoice\RendererInterface' }
+
+    KimaiPlugin\SwissQrBundle\Invoice\SwissQrOdsRenderer:
+        class: KimaiPlugin\SwissQrBundle\Invoice\SwissQrOdsRenderer
+        decorates: App\Invoice\Renderer\OdsRenderer
+        arguments:
+            $swissQrService: '@KimaiPlugin\SwissQrBundle\Service\SwissQrService'
+        tags:
+            - { name: 'App\Invoice\RendererInterface' }

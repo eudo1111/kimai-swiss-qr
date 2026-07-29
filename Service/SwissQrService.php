@@ -8,7 +8,7 @@ use App\Invoice\InvoiceModel;
 use App\Invoice\InvoiceModelHydrator;
 use Sprain\SwissQrBill as QrBill;
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../Resources/plugin-autoload.php';
 
 class SwissQrService implements InvoiceModelHydrator
 {
